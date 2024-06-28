@@ -1,9 +1,8 @@
-FROM python:3.12.4-bookworm AS primary
+FROM python:3.12-bookworm AS primary
 WORKDIR /app
 
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
-	git \
 	libportaudio2 \
 	avahi-daemon \
 	alsa-utils \
@@ -12,10 +11,11 @@ RUN apt-get install -y --no-install-recommends \
 	libavahi-common3 \
 	libvorbisidec1 \
 	pulseaudio \
-	cmake
-RUN pip install --upgrade pip wheel setuptools
-RUN pip install numpy
-RUN pip install git+https://github.com/LedFx/LedFx
+	cmake \
+	gcc
+
+RUN pip install --upgrade pip wheel setuptools numpy
+RUN pip install LedFx
 
 RUN adduser root pulse-access
 
@@ -37,7 +37,8 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then ARCHITECTURE=armhf; elif [ "
 
 FROM primary
 COPY --from=snapcast /app/snapclient.deb .
-RUN apt-get install -fy ./snapclient.deb
+RUN apt-get install -fy ./snapclient.deb \
+	&& rm snapclient.deb
 
 COPY setup-files/ /app/
 RUN chmod a+wrx /app/*
