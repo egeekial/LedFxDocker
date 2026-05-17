@@ -1,5 +1,7 @@
 # LedFxDocker
 
+[![GHCR Image](https://img.shields.io/badge/GHCR-ghcr.io%2Fegeekial%2Fledfxdocker-blue?logo=github)](https://github.com/egeekial/LedFxDocker/pkgs/container/ledfxdocker)
+
 A Docker image for [LedFx](https://github.com/LedFx/LedFx.git), based on Debian 13 `trixie`.
 
 This fork publishes the supported image to GitHub Container Registry:
