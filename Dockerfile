@@ -14,6 +14,7 @@ RUN apt-get install -y --no-install-recommends \
 	libavahi-common3 \
 	libvorbisidec1 \
 	pulseaudio \
+	pulseaudio-utils \
 	squeezelite \
 	cmake \
 	gcc

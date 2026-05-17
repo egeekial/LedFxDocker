@@ -33,8 +33,6 @@ services:
     container_name: ledfx
     environment:
       - HOST=host.docker.internal
-      - FORMAT=-r 44100 -f S16_LE -c 2
-      - SQUEEZE=1
     ports:
       - 8888:8888
     volumes:
@@ -67,7 +65,9 @@ At least one audio input should be configured.
 
 | Variable | Function |
 | --- | --- |
-| `HOST` | Snapcast server hostname or IP, resolved from inside the container. Use `host.docker.internal` to reach the Docker host when supported. |
+| `HOST` | Snapcast server hostname or IP, resolved from inside the container. Use an IP address or `network_mode: host` if local hostnames do not resolve from inside Docker. |
+| `SNAPCLIENT_PLAYER` | Optional Snapclient player override. Defaults to `pulse:server=unix:/run/pulse/native`. |
+| `SNAPCLIENT_OPTS` | Optional extra Snapclient arguments. |
 | `FORMAT` | Audio format passed to `aplay` for `/app/audio/stream`, such as `-r 44100 -f S16_LE -c 2`. |
 | `SQUEEZE` | Set to `1` to start `squeezelite` for Logitech Media Server. |
 
@@ -76,6 +76,8 @@ At least one audio input should be configured.
 ### Snapcast
 
 [Snapcast](https://github.com/badaix/snapcast) is a server for synchronous multi-room audio. Set `HOST` to make this image act as a Snapcast client.
+
+Snapclient writes the stream into the container's PulseAudio server by default. In the LedFx UI, open audio settings and select the `pulse` audio input. If reactive effects still do not move, verify that the container logs show `Starting Snapclient` without a failure warning, then try setting `HOST` to the Snapcast server IP address instead of a local DNS name.
 
 ### Named Pipe
 
