@@ -2,7 +2,7 @@ version: '3'
 
 services:
   ledfx:
-    image: shirom/ledfx
+    image: ghcr.io/egeekial/ledfxdocker:latest
     container_name: ledfx
     environment: 
       - SQUEEZE=1

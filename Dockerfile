@@ -1,5 +1,7 @@
-FROM python:3.12-bookworm AS primary
+FROM python:3.12-trixie AS primary
 WORKDIR /app
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
@@ -11,11 +13,13 @@ RUN apt-get install -y --no-install-recommends \
 	libavahi-common3 \
 	libvorbisidec1 \
 	pulseaudio \
+	squeezelite \
 	cmake \
 	gcc
 
-RUN pip install --upgrade pip wheel setuptools numpy
-RUN pip install LedFx
+RUN python -m venv "$VIRTUAL_ENV"
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools numpy
+RUN pip install --no-cache-dir LedFx
 
 RUN adduser root pulse-access
 
@@ -30,10 +34,10 @@ RUN echo '*' > /etc/mdns.allow \
 
 # Get snapcast.deb for correct platform and copy to primary context
 FROM primary AS snapcast
-RUN pip install lastversion
+RUN pip install --no-cache-dir lastversion
 ARG TARGETPLATFORM
-RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then ARCHITECTURE=armhf; elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=armhf; else ARCHITECTURE=amd64; fi \
-	&& lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\_bookworm_with-pulse.deb))$" -o snapclient.deb
+RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then ARCHITECTURE=armhf; elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; else ARCHITECTURE=amd64; fi \
+	&& lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\_trixie_with-pulse.deb))$" -o snapclient.deb
 
 FROM primary
 COPY --from=snapcast /app/snapclient.deb .

@@ -10,7 +10,7 @@ services:
     volumes:
       - ./snapcast:/tmp/snapcast
   ledfx:
-    image: shirom/ledfx
+    image: ghcr.io/egeekial/ledfxdocker:latest
     container_name: ledfx
     environment: 
       - HOST=snapserver

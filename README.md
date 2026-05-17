@@ -1,33 +1,38 @@
-[![Docker Pulls](https://img.shields.io/docker/pulls/shirom/ledfx.svg?style=for-the-badge&logo=github)](https://hub.docker.com/repository/docker/shirom/ledfx)
-
 # LedFxDocker
-A Docker Image for [LedFx](https://github.com/LedFx/LedFx.git). 
 
-## Introduction
-Compiling LedFx to run on different systems is difficult because of all the dependencies. It's especially difficult on a Raspberry Pi (building LedFx on ARM takes over 2 hours). This image has everything built for you, and it can get audio from a [Snapcast server](https://github.com/badaix/snapcast) or a [named pipe](https://www.linuxjournal.com/article/2156).
+A Docker image for [LedFx](https://github.com/LedFx/LedFx.git), based on Debian 13 `trixie`.
+
+This fork publishes the supported image to GitHub Container Registry:
+
+```sh
+docker pull ghcr.io/egeekial/ledfxdocker:latest
+```
+
+The image includes LedFx, PulseAudio, Snapcast client support, named-pipe audio support, WLED discovery support through Avahi, and optional Logitech Media Server support through `squeezelite`.
 
 ## Supported Architectures
-This image supports `x86-64`, `arm` and `arm64`. Docker will automatically pull the appropriate version. 
 
-## Tags 
-Tag | Description 
---- | -------- 
-`latest` | The master branch of LedFx. 
-`frontend_beta` | The frontend_beta branch of LedFx. 
+The published image is built for:
 
-Feel free to open an issue if either of these is out of date
+| Platform | Notes |
+| --- | --- |
+| `linux/amd64` | x86-64 systems |
+| `linux/arm64` | 64-bit ARM systems |
+| `linux/arm/v7` | 32-bit ARMv7 systems |
+
+Docker automatically pulls the matching platform when one is available.
 
 ## Setup
-### docker-compose.yml
-```
-version: '3'
 
+Use the published GHCR image for normal installs:
+
+```yaml
 services:
   ledfx:
-    image: shirom/ledfx 
+    image: ghcr.io/egeekial/ledfxdocker:latest
     container_name: ledfx
-    environment: 
-      - HOST=192.168.0.15
+    environment:
+      - HOST=host.docker.internal
       - FORMAT=-r 44100 -f S16_LE -c 2
       - SQUEEZE=1
     ports:
@@ -35,83 +40,80 @@ services:
     volumes:
       - ~/ledfx-config:/app/ledfx-config
       - ~/audio:/app/audio
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 ```
 
-You can add support for network discovery by adding `network_mode: host`. See [use host networking](https://docs.docker.com/network/host/) for more information. Adding this can break compatibilty on Windows and Mac. 
+Only set the audio input variables you need. For example, remove `SQUEEZE` if you are not using Logitech Media Server, remove `HOST` if you are not connecting to a Snapcast server, and remove `FORMAT` if you are not writing audio to `/app/audio/stream`.
 
-### Volumes
+Network discovery works best with host networking:
 
-Volume | Function 
---- | -------- 
-`/app/ledfx-config` | This is where the LedFx configuration files are stored. Most people won't need to change anything here manually, so feel free to use a [named volume](https://stackoverflow.com/questions/43248988/how-do-named-volumes-work-in-docker).
-`/app/audio` | This folder contains a [named pipe](https://www.linuxjournal.com/article/2156) called `stream` that you can write audio data to. This can be connected to Mopidy, FFmpeg, system audio, or more. See [Sending Audio](#sending-audio) for more information. This volume doesn't need to be set if the `FORMAT` environment variable isn't set. 
+```yaml
+network_mode: host
+```
 
-### Environment Variables
-Each variable corresponds to a different input method. One of the following variables must be set to send audio into the container (or you can set all of them). 
+Host networking can behave differently on Docker Desktop for macOS and Windows, so keep bridge networking if portability matters more than discovery.
 
-Variable | Function
---- | --------
-`HOST` | This is the IP of the Snapcast server. Keep in mind that this IP is resolved from inside the container unless you use [host networking](https://docs.docker.com/network/host/). To refer to other docker containers in [bridge networking](https://docs.docker.com/network/bridge/) (the default for any two containers in the same compose file), just use the name of the container. To refer to `127.0.0.1` use `host.docker.internal` (compatibilty varies greatly between platforms and versions). 
-`FORMAT` | This variable specifies the format of the audio coming into `/app/audio/stream`. It can use any of the options defined in [aplay](https://linux.die.net/man/1/aplay). The example shown above corresponds to 44100hz, 16 bits, and 2 channels, the default for most applications. 
-`SQUEEZE` | Setting this variable to `1` allows this image to act as a [squeezelite](https://github.com/ralph-irving/squeezelite) client that can connect to a [Logitech Media Server](https://mysqueezebox.com/download).
+## Volumes
+
+| Volume | Function |
+| --- | --- |
+| `/app/ledfx-config` | LedFx configuration files. A named volume works if you do not need to edit files directly. |
+| `/app/audio` | Contains a named pipe called `stream` when `FORMAT` is set. Write raw audio data here from FFmpeg, Mopidy, PulseAudio, or another source. |
+
+## Environment Variables
+
+At least one audio input should be configured.
+
+| Variable | Function |
+| --- | --- |
+| `HOST` | Snapcast server hostname or IP, resolved from inside the container. Use `host.docker.internal` to reach the Docker host when supported. |
+| `FORMAT` | Audio format passed to `aplay` for `/app/audio/stream`, such as `-r 44100 -f S16_LE -c 2`. |
+| `SQUEEZE` | Set to `1` to start `squeezelite` for Logitech Media Server. |
 
 ## Sending Audio
 
-The trickiest part of using this image is getting audio into it. Dealing with audio device drivers is pretty painful; so much so that I spent 20 minutes getting LedFx installed and 50 hours squashing audio bugs. Don't worry, that work has already been done, so here are four approaches to get audio into the container:
-
 ### Snapcast
 
-[Snapcast](https://github.com/badaix/snapcast) is a server for playing music synchronously to multiple devices. This image can act as a snapclient device and connect to a snapserver simply by setting the `HOST` environment variable, but you need to get audio into Snapcast too. 
-
-Fundamentally, Snapcast's server gets its audio from a named pipe. This is where option two comes in; you can send audio directly into this image using its named pipe. Snapcast is useful if you have multiple speakers you want to connect to, you already have a snapserver, or you want to send audio from a separate device and have it play in both LedFx and over the system speaker out (`phone -> raspberry pi running Snapcast and LedFx -> speakers`). 
+[Snapcast](https://github.com/badaix/snapcast) is a server for synchronous multi-room audio. Set `HOST` to make this image act as a Snapcast client.
 
 ### Named Pipe
 
-This is a great approach if you just want to play system audio or if you're connecting it to some other audio service, and you don't need the extra bloat from Snapcast. Because this image receives data just like a snapserver, any tutorial you find for getting audio into a snapserver will work with this image. [Setup of audio players/server](https://github.com/badaix/snapcast/blob/master/doc/player_setup.md) provides instructions on how to connect Mopidy, FFmpeg, PulseAudio, Airplay, Spotify, VLC, and more. 
-
-To play system audio, you could use Docker's `--device` flag or use FFmpeg to record system audio and send it to the pipe. 
-
-If you want to use a method not mentioned here or one that doesn't have an explicit named pipe option, your easiest method would probably be playing the audio on the system; then use a tool like FFmpeg or PulseAudio to record the system's audio and send it to the container. 
-
-Check out the `examples/` folder for ideas. Once you've completed your setup, consider sharing your compose file; I'm always looking for new examples to add. 
+Set `FORMAT` to create `/app/audio/stream`, then write raw audio to that pipe. Any Snapcast named-pipe audio guide is generally applicable. The [Snapcast player setup documentation](https://github.com/badaix/snapcast/blob/master/doc/player_setup.md) includes examples for Mopidy, FFmpeg, PulseAudio, AirPlay, Spotify, VLC, and other sources.
 
 ### Logitech Media Server
 
-You can send in audio from a [Logitech Media Server](https://mysqueezebox.com/download). You'll need to set the environment variable `SQUEEZE=1`. There's a docker example of this in the `examples/` folder. To connect, simply setup your Logitech Media Server on the same network as this container, and your server will automatically detect the LedFx as a client and provide an option to connect. If your media server is on a different network or is not detecting LedFx, you can configure `squeeze.conf` in the `setup-files/` folder and build the container locally.
-
-### Balena Sound
-
-[balenaSound](https://github.com/balenalabs/balena-sound) is a Snapserver that's already connected to Bluetooth, Airplay, Spotify, and UPNP that's very easy to set up. Unfortunately, you have to be fully integrated into Balena's system to use it. This means deploying on balenaOS and using Balena's build tools. However, I've integrated this image into their ecosystem, so it will run alongside balenaSound on the same device. 
-
-Just click the button below to deploy it!
-
-[![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/ShiromMakkad/LedFx-balenaSound)
-
-See [LedFx-balenaSound](https://github.com/ShiromMakkad/LedFx-balenaSound) for hardware requirements and other information. 
-
-You could also run a standalone instance of balenaSound on one device, LedFx on another device, and connect the two using the `HOST` environment variable. 
-
-## Support Information
-- Shell access while the container is running: `docker exec -it ledfx /bin/bash`
-- Logs: `docker logs ledfx`
-
-## Todo
-- Add a Mopidy example
-- Add an example using `--device`
-- Check if a direct connection to the PulseAudio server works. [Example](https://github.com/balenablocks/audio#sendreceive-audio). 
+Set `SQUEEZE=1` to run this image as a [squeezelite](https://github.com/ralph-irving/squeezelite) client for [Logitech Media Server](https://mysqueezebox.com/download). If discovery does not work across your network, edit `setup-files/squeeze.conf` and build a local image.
 
 ## Building Locally
 
-If you want to make local modifications to this image for development purposes or just to customize the logic:
-```
-git clone https://github.com/ShiromMakkad/LedFxDocker.git
+To build this fork locally:
+
+```sh
+git clone https://github.com/egeekial/LedFxDocker.git
 cd LedFxDocker
-docker build -t shirom/ledfx .
+docker build -t ledfx:latest .
 ```
-To build for `x86-64` and `arm` use:
 
-`docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --tag shirom/ledfx --output type=image,push=false .`
+The included `docker-compose.yml` builds the local Dockerfile and tags it as `ledfx:latest`:
 
-Keep in mind, this command takes over 2 hours to finish for `arm` because of the `aubio` installation.
+```sh
+docker compose up --build
+```
 
-If you're looking for ways to contribute, check the TODO or contribute to `examples/`. 
+If your Docker install still uses the legacy compose binary, run:
+
+```sh
+docker-compose up --build
+```
+
+GitHub Actions publishes the multi-architecture GHCR image from `master` pushes.
+
+## Support Commands
+
+```sh
+docker exec -it ledfx /bin/bash
+docker logs ledfx
+```
+
+After the first GHCR publish, verify the package visibility in GitHub Packages if anonymous pulls should work.
