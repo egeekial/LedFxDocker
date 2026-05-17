@@ -1,7 +1,8 @@
 FROM python:3.12-trixie AS primary
 WORKDIR /app
 ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV PATH=/opt/venv/bin:$PATH
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
@@ -40,6 +41,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then ARCHITECTURE=armhf; elif [ "
 	&& lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\_trixie_with-pulse.deb))$" -o snapclient.deb
 
 FROM primary
+ARG DEBIAN_FRONTEND=noninteractive
 COPY --from=snapcast /app/snapclient.deb .
 RUN apt-get install -fy ./snapclient.deb \
 	&& rm snapclient.deb
@@ -47,4 +49,4 @@ RUN apt-get install -fy ./snapclient.deb \
 COPY setup-files/ /app/
 RUN chmod a+wrx /app/*
 
-ENTRYPOINT ./entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,4 +1,8 @@
 #!/bin/bash
+set -e
+
+export VIRTUAL_ENV="${VIRTUAL_ENV:-/opt/venv}"
+export PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Start avahi daemon for WLED auto discovery
 avahi-daemon --daemonize --no-drop-root
@@ -8,20 +12,22 @@ avahi-daemon --daemonize --no-drop-root
 rm -rf /var/run/pulse /var/lib/pulse /root/.config/pulse
 pulseaudio -D --verbose --exit-idle-time=-1 --system --disallow-exit
 
-if [[ -v FORMAT ]]; then
+if [[ -n "${FORMAT+x}" ]]; then
     ./pipe-audio.sh
 fi
 
-if [[ -v HOST ]]; then
+if [[ -n "${HOST+x}" ]]; then
     snapclient --host "$HOST" --daemon 1
 fi
 
-if [[ -v SQUEEZE ]]; then
+if [[ -n "${SQUEEZE+x}" ]]; then
     ./squeeze.sh
 fi
 
-mkdir /app/ledfx-config
+mkdir -p /app/ledfx-config /root/.ledfx
 
-mv -vn /app/config.yaml /app/ledfx-config/
-mkdir /root/.ledfx
-ledfx -c /app/ledfx-config 
+if [[ -f /app/config.yaml && ! -f /app/ledfx-config/config.yaml ]]; then
+    cp -v /app/config.yaml /app/ledfx-config/config.yaml
+fi
+
+exec "$VIRTUAL_ENV/bin/ledfx" -c /app/ledfx-config
