@@ -1,26 +1,31 @@
-FROM python:3.9-buster
-
+FROM python:3.12-trixie AS primary
 WORKDIR /app
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+ARG DEBIAN_FRONTEND=noninteractive
 
-RUN pip install Cython
-RUN dpkg --add-architecture armhf
 RUN apt-get update
-RUN apt-get install -y gcc \
-                       git \
-                       libatlas3-base \
-		       libavformat58 \
-		       portaudio19-dev \
-		       avahi-daemon \
-		       pulseaudio
-RUN pip install --upgrade pip wheel setuptools
-RUN pip install lastversion
-RUN pip install git+https://github.com/LedFx/LedFx
+RUN apt-get install -y --no-install-recommends \
+	libportaudio2 \
+	avahi-daemon \
+	alsa-utils \
+	libnss-mdns \
+	libavahi-client3 \
+	libavahi-common3 \
+	libvorbisidec1 \
+	pulseaudio \
+	pulseaudio-utils \
+	squeezelite \
+	cmake \
+	gcc
 
-RUN apt-get install -y alsa-utils
+RUN python -m venv "$VIRTUAL_ENV"
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools numpy
+RUN pip install --no-cache-dir LedFx
+
 RUN adduser root pulse-access
 
-# https://gnanesh.me/avahi-docker-non-root.html
-RUN apt-get install -y libnss-mdns
+# https://web.archive.org/web/20230527143933/https://gnanesh.me/avahi-docker-non-root.html
 RUN echo '*' > /etc/mdns.allow \
 	&& sed -i "s/hosts:.*/hosts:          files mdns4 dns/g" /etc/nsswitch.conf \
 	&& printf "[server]\nenable-dbus=no\n" >> /etc/avahi/avahi-daemon.conf \
@@ -29,21 +34,20 @@ RUN echo '*' > /etc/mdns.allow \
 	&& chown avahi:avahi /var/run/avahi-daemon \
 	&& chmod 777 /var/run/avahi-daemon
 
-RUN apt-get install -y wget \
-                       libavahi-client3:armhf \
-                       libavahi-common3:armhf \
-                       apt-utils \
-		       libvorbisidec1:armhf
-
-RUN apt-get install -y squeezelite 
-
+# Get snapcast.deb for correct platform and copy to primary context
+FROM primary AS snapcast
+RUN pip install --no-cache-dir lastversion
 ARG TARGETPLATFORM
-RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then ARCHITECTURE=armhf; elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=armhf; else ARCHITECTURE=amd64; fi \
-    && lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\.deb))$" -o snapclient.deb
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; else ARCHITECTURE=amd64; fi \
+	&& lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\_trixie_with-pulse.deb))$" -o snapclient.deb
 
-RUN apt-get install -fy ./snapclient.deb
+FROM primary
+ARG DEBIAN_FRONTEND=noninteractive
+COPY --from=snapcast /app/snapclient.deb .
+RUN apt-get install -fy ./snapclient.deb \
+	&& rm snapclient.deb
 
 COPY setup-files/ /app/
 RUN chmod a+wrx /app/*
 
-ENTRYPOINT ./entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]
