@@ -41,18 +41,29 @@ fi
 
 if [[ -n "${HOST+x}" ]]; then
     SNAPCLIENT_PLAYER="${SNAPCLIENT_PLAYER:-pulse:server=$PULSE_SERVER}"
-    snapclient_args=(--host "$HOST" --player "$SNAPCLIENT_PLAYER")
+    if [[ -n "${SNAPCLIENT_SERVER:-}" ]]; then
+        snapclient_server="$SNAPCLIENT_SERVER"
+    elif [[ "$HOST" == *"://"* ]]; then
+        snapclient_server="$HOST"
+    elif [[ "$HOST" == *":"* ]]; then
+        snapclient_server="tcp://$HOST"
+    else
+        snapclient_server="tcp://$HOST:${SNAPCLIENT_PORT:-1704}"
+    fi
+
+    snapclient_args=(--player "$SNAPCLIENT_PLAYER")
     if [[ -n "${SNAPCLIENT_OPTS:-}" ]]; then
         read -r -a snapclient_extra_args <<< "$SNAPCLIENT_OPTS"
         snapclient_args+=("${snapclient_extra_args[@]}")
     fi
+    snapclient_args+=("$snapclient_server")
 
-    echo "Starting Snapclient for '$HOST' with player '$SNAPCLIENT_PLAYER'..."
+    echo "Starting Snapclient for '$snapclient_server' with player '$SNAPCLIENT_PLAYER'..."
     snapclient "${snapclient_args[@]}" &
     snapclient_pid=$!
     sleep 1
     if ! kill -0 "$snapclient_pid" 2>/dev/null; then
-        echo "Warning: snapclient failed to start for host '$HOST'." >&2
+        echo "Warning: snapclient failed to start for server '$snapclient_server'." >&2
     fi
 fi
 

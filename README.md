@@ -18,7 +18,6 @@ The published image is built for:
 | --- | --- |
 | `linux/amd64` | x86-64 systems |
 | `linux/arm64` | 64-bit ARM systems |
-| `linux/arm/v7` | 32-bit ARMv7 systems |
 
 Docker automatically pulls the matching platform when one is available.
 
@@ -66,6 +65,8 @@ At least one audio input should be configured.
 | Variable | Function |
 | --- | --- |
 | `HOST` | Snapcast server hostname or IP, resolved from inside the container. Use an IP address or `network_mode: host` if local hostnames do not resolve from inside Docker. |
+| `SNAPCLIENT_SERVER` | Optional full Snapcast server URI, such as `tcp://volumio.local.lan:1704`. Overrides `HOST`. |
+| `SNAPCLIENT_PORT` | Optional Snapcast server port used with `HOST`. Defaults to `1704`. |
 | `SNAPCLIENT_PLAYER` | Optional Snapclient player override. Defaults to `pulse:server=unix:/run/pulse/native`. |
 | `SNAPCLIENT_OPTS` | Optional extra Snapclient arguments. |
 | `FORMAT` | Audio format passed to `aplay` for `/app/audio/stream`, such as `-r 44100 -f S16_LE -c 2`. |
