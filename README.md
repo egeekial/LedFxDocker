@@ -32,6 +32,7 @@ services:
   ledfx:
     image: ghcr.io/egeekial/ledfxdocker:latest
     container_name: ledfx
+    restart: unless-stopped
     environment:
       - HOST=host.docker.internal
     ports:
@@ -113,6 +114,20 @@ docker-compose up --build
 ```
 
 GitHub Actions publishes the multi-architecture GHCR image from `master` pushes.
+
+The image treats LedFx and Snapclient (when `HOST` is configured) as critical processes. If either exits, the container stops so Docker can restart the complete audio stack. The Compose examples use `restart: unless-stopped` for this behavior. To enable the same policy on an existing container without recreating it:
+
+```sh
+docker update --restart unless-stopped ledfx
+```
+
+Docker health checks alone do not restart unhealthy containers, so the image uses process exit and Docker's restart policy instead.
+
+## Automated Updates
+
+LedFx is pinned in `requirements.txt`. Dependabot checks for new LedFx releases weekly and opens an update pull request. The pull request is built and smoke-tested, then configured for squash auto-merge when all required checks pass.
+
+In the repository settings, enable **Allow auto-merge** and make the `Smoke test` and `Multi-architecture build` jobs required checks for `master`. The publish workflow also performs an uncached build every Sunday to refresh Debian packages, Python transitive dependencies, and Snapclient. Publishing updates `ghcr.io/egeekial/ledfxdocker:latest`; it does not update containers already running on Docker hosts.
 
 ## Support Commands
 
