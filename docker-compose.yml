@@ -4,6 +4,7 @@ services:
   ledfx:
     image: ledfx:latest
     container_name: ledfx
+    restart: unless-stopped
     build:
       context: .
     environment: 

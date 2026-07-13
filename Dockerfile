@@ -15,13 +15,15 @@ RUN apt-get install -y --no-install-recommends \
 	libvorbisidec1 \
 	pulseaudio \
 	pulseaudio-utils \
+	tini \
 	squeezelite \
 	cmake \
 	gcc
 
 RUN python -m venv "$VIRTUAL_ENV"
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools numpy
-RUN pip install --no-cache-dir LedFx
+COPY requirements.txt .
+RUN pip install --no-cache-dir --requirement requirements.txt
 
 RUN adduser root pulse-access
 
@@ -50,4 +52,4 @@ RUN apt-get install -fy ./snapclient.deb \
 COPY setup-files/ /app/
 RUN chmod a+wrx /app/*
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/app/entrypoint.sh"]

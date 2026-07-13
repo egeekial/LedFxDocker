@@ -7,6 +7,29 @@ export PULSE_SERVER="${PULSE_SERVER:-unix:/run/pulse/native}"
 PULSE_SINK="${PULSE_SINK:-ledfx_snapcast}"
 PULSE_SOURCE="${PULSE_SOURCE:-$PULSE_SINK.monitor}"
 
+critical_pids=()
+critical_names=()
+
+stop_critical_processes() {
+    trap - TERM INT
+
+    for pid in "${critical_pids[@]}"; do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+
+    for pid in "${critical_pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+}
+
+handle_shutdown() {
+    echo "Received shutdown signal; stopping critical processes..."
+    stop_critical_processes
+    exit 0
+}
+
+trap handle_shutdown TERM INT
+
 # Start avahi daemon for WLED auto discovery
 mkdir -p /run/avahi-daemon
 rm -f /run/avahi-daemon/pid
@@ -61,10 +84,8 @@ if [[ -n "${HOST+x}" ]]; then
     echo "Starting Snapclient for '$snapclient_server' with player '$SNAPCLIENT_PLAYER'..."
     snapclient "${snapclient_args[@]}" &
     snapclient_pid=$!
-    sleep 1
-    if ! kill -0 "$snapclient_pid" 2>/dev/null; then
-        echo "Warning: snapclient failed to start for server '$snapclient_server'." >&2
-    fi
+    critical_pids+=("$snapclient_pid")
+    critical_names+=("snapclient")
 fi
 
 if [[ -n "${SQUEEZE+x}" ]]; then
@@ -86,4 +107,32 @@ if [[ ! -x "$VIRTUAL_ENV/bin/ledfx" ]]; then
 fi
 
 echo "Starting LedFx..."
-exec "$VIRTUAL_ENV/bin/ledfx" -c /app/ledfx-config
+"$VIRTUAL_ENV/bin/ledfx" -c /app/ledfx-config &
+ledfx_pid=$!
+critical_pids+=("$ledfx_pid")
+critical_names+=("ledfx")
+
+exited_pid=""
+if wait -n -p exited_pid "${critical_pids[@]}"; then
+    exit_status=0
+else
+    exit_status=$?
+fi
+
+exited_name="unknown"
+for index in "${!critical_pids[@]}"; do
+    if [[ "${critical_pids[$index]}" == "$exited_pid" ]]; then
+        exited_name="${critical_names[$index]}"
+        break
+    fi
+done
+
+echo "Error: critical process '$exited_name' exited with status $exit_status; stopping container for restart." >&2
+stop_critical_processes
+
+# A critical process exiting cleanly is still a service failure. Use a non-zero
+# status so the failure is also compatible with Docker's on-failure policy.
+if [[ "$exit_status" -eq 0 ]]; then
+    exit_status=1
+fi
+exit "$exit_status"
