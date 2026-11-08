@@ -22,8 +22,9 @@ RUN apt-get install -y --no-install-recommends \
 
 RUN python -m venv "$VIRTUAL_ENV"
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools numpy
-COPY requirements.txt .
-RUN pip install --no-cache-dir --requirement requirements.txt
+# CI passes the release it resolved from PyPI; local builds install the latest.
+ARG LEDFX_VERSION=
+RUN pip install --no-cache-dir "LedFx${LEDFX_VERSION:+==$LEDFX_VERSION}"
 
 RUN adduser root pulse-access
 
@@ -41,7 +42,15 @@ FROM primary AS snapcast
 RUN pip install --no-cache-dir lastversion
 ARG TARGETPLATFORM
 RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then ARCHITECTURE=armhf; elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; else ARCHITECTURE=amd64; fi \
-	&& lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\_trixie_with-pulse.deb))$" -o snapclient.deb
+	&& for attempt in 1 2 3 4 5; do \
+		rm -f snapclient.deb; \
+		lastversion download badaix/snapcast --format assets --filter "^snapclient_(?:(\d+)\.)?(?:(\d+)\.)?(?:(\d+)\-)?(?:(\d)(_$ARCHITECTURE\_trixie_with-pulse.deb))$" -o snapclient.deb \
+			&& dpkg-deb --info snapclient.deb >/dev/null \
+			&& break; \
+		[ "$attempt" -lt 5 ] || exit 1; \
+		echo "Snapclient download failed (attempt $attempt); retrying..."; \
+		sleep $((attempt * 15)); \
+	done
 
 FROM primary
 ARG DEBIAN_FRONTEND=noninteractive
