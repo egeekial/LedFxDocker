@@ -125,9 +125,18 @@ Docker health checks alone do not restart unhealthy containers, so the image use
 
 ## Automated Updates
 
-LedFx is pinned in `requirements.txt`. Dependabot checks for new LedFx releases weekly and opens an update pull request. The pull request is built and smoke-tested, then configured for squash auto-merge when all required checks pass.
+The publish workflow checks PyPI for a new LedFx release every 6 hours. When the latest release has no image tag yet, it builds that version, runs the smoke test, and publishes `ghcr.io/egeekial/ledfxdocker:latest` and a tag for the LedFx version, such as `:2.2.1`. If the smoke test fails, nothing is published and the next check tries again.
 
-In the repository settings, enable **Allow auto-merge** and make the `Smoke test` and `Multi-architecture build` jobs required checks for `master`. The publish workflow also performs an uncached build every Sunday to refresh Debian packages, Python transitive dependencies, and Snapclient. Publishing updates `ghcr.io/egeekial/ledfxdocker:latest`; it does not update containers already running on Docker hosts.
+The workflow also performs an uncached build every Sunday to refresh Debian packages, Python transitive dependencies, and Snapclient. Publishing does not update containers already running on Docker hosts; pull the new image and recreate them.
+
+## Remote Access
+
+LedFx accepts requests addressed by IP or by a local name, such as `ledfx.local` or `ledfx.lan`. If you reach it through a public DNS name, such as a reverse proxy, add that name to `allowed_hosts` in `ledfx-config/config.yaml`, or LedFx responds with a 403:
+
+```yaml
+allowed_hosts:
+  - ledfx.example.com
+```
 
 ## Support Commands
 
