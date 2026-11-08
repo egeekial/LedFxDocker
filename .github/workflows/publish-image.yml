@@ -33,10 +33,24 @@ jobs:
   resolve:
     name: Resolve LedFx release
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      packages: read
     outputs:
       version: ${{ steps.pypi.outputs.version }}
       should-build: ${{ steps.published.outputs.should-build }}
     steps:
+      # GitHub disables scheduled workflows on repositories without recent
+      # commits. Re-enabling on each scheduled run keeps the release poll alive.
+      - name: Keep scheduled workflow enabled
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/publish-image.yml/enable" \
+            || echo "::warning::Could not refresh the workflow's enabled state."
+
       - name: Read latest LedFx version from PyPI
         id: pypi
         run: |
